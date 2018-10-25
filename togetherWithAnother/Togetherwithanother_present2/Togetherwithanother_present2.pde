@@ -1,14 +1,7 @@
 import org.openkinect.processing.*;
 import java.nio.*;
-//import processing.sound.*;
-//import codeanticode.syphon.*;
 PGraphics canvas;
 //SyphonServer server;
-
-//sound
-//SoundFile myNoise;
-//SoundFile myBackground;
-//SoundFile myTime;
 
 //kinect
 Kinect2 kinect2A;
@@ -21,7 +14,9 @@ int maxThresh;
 int totalDepth = 0;
 boolean doScreenClean = false;
 int normalCleanAlpha = 10;
-int skipFrames = 8;
+int skipFrames = 4;
+
+int[] featherBorders;
 
 void settings(){
   size(1024, 848, P3D);
@@ -30,18 +25,6 @@ void settings(){
 }
 
 void setup() {
-
-  //size(1024, 848, P3D);
-
-  //myBackground = new SoundFile(this, "time_mono2.mp3");
-  //myBackground.loop();
-  //myBackground.amp(0.5);
-  //myNoise = new SoundFile(this, "noise.wav");
-  //myNoise.loop();
-  //myNoise.amp(0.2);
-  //myTime= new SoundFile(this,  "time_mono.mp3");
-  //myTime.loop();
-  //myTime.amp(0.3);
 
   kinect2A = new Kinect2(this);
   kinect2A.initDepth();
@@ -54,9 +37,10 @@ void setup() {
   kinect2B.initDevice(1);
 
   minThresh= 600;
-  maxThresh= 2150;
+  maxThresh= 2400;
   
   canvas = createGraphics(width,height,P3D);
+
   //create our syphon serever 
   //server = new SyphonServer (this,"Processing Syphon");
   
@@ -89,7 +73,7 @@ void draw() {
       canvas.rect(0,0,width,height);
     } 
     displayDepth(depthA, colorA, true); //kinectData, color, control sound//
-    displayDepth(depthB, colorB, false); 
+    // displayDepth(depthB, colorB, false); 
   }
   canvas.endDraw();
   image(canvas,0,0);
@@ -99,28 +83,37 @@ void draw() {
 void displayDepth(int[] depthArr, int[] rgb, boolean soundControl) {
   
   int pixelCoverage = 0; // detect if there is objects in the view.
+
+  int[] line = new int[96];
   
   for ( int y = 0; y < kinect2A.depthHeight; y++) {
-    for (int x = 0; x < kinect2A.depthWidth; x++) {
-      
-      if( x <= 64 || x >= kinect2A.depthWidth - 64 ){
-        continue;
-      }
+
+    for (int x = 64; x < kinect2A.depthWidth - 64; x++) {
 
       int offset = x + kinect2A.depthWidth * y;
+
       int depthData = depthArr[offset];
       int displayVal = 0;
-      //int displayVal2 = 0;
       
       if(soundControl == true){
         totalDepth += depthData;
       }
 
+      if(y == 200 && x % 4 ==0){
+        line[x/4-16] = depthArr[offset];
+      }
+      
       if ( depthData > minThresh && depthData < maxThresh ) {
-        displayVal = round(map(depthData, maxThresh, minThresh, 255, 10));
-        //displayVal2 = round(map(depthData, maxThresh, minThresh, 10, 255));
-        //blendMode(ADD);
+        displayVal = round(map(depthData, maxThresh, minThresh, 255, 5));
+
+        // if(y == 200){
+        //   stroke(255, 0, 0, displayVal);
+        // }else{
+        //   stroke(rgb[0], rgb[1], rgb[2], displayVal);
+        // }
+
         stroke(rgb[0], rgb[1], rgb[2], displayVal);
+
         strokeWeight(displayVal/30);
         point(2 * x, 2 * y, 255 - displayVal);       
         if(displayVal > 50){
@@ -129,39 +122,38 @@ void displayDepth(int[] depthArr, int[] rgb, boolean soundControl) {
       }
     }
   }
+
+  strokeWeight(2);
+  stroke(128, 255, 0, 100);
+  // update feather border
+  featherBorders = cliffMapper( line );
+}
+
+int[] cliffMapper(int[] line){
+
+  line(128, 0 , 128 ,height);
+  line(line.length*8+128, 0 , line.length*8+128 ,height);
+
+  int[] borderRecord = {};
+
+  for(int i = 1; i < line.length; i++){
+    int depthLeft = line[i-1];
+    int depthRight = line[i];
+    int deltaDepth = depthRight - depthLeft;
+    if(abs(deltaDepth) > 960){
+      line(i * 8 + 128, 0 , i * 8 + 128, height);
+      borderRecord = append(borderRecord, i * 8 + 128);
+    }
   }
-  
-  //if(soundControl == true){
-  //  int avgDepth = int(totalDepth/217088);
-  //  //println(pixelCoverage);
-  //  //println(avgDepth);
-  //  if( avgDepth > 1200 || avgDepth < 32 || pixelCoverage <= 900){ 
-  //    //myNoise.amp(0);
-  //    myTime.amp(0);
-  //    return;
-  //  }
-    
-    //float noiseVolume = map(avgDepth, 500, 1024, 0.3, 1);
-//    float noiseVolume1=0.3;
-//    if(avgDepth>800&&avgDepth<1024){
-//      noiseVolume1=1;
-//    }else if(avgDepth<800&&avgDepth>500){
-//      noiseVolume1=1;
-//    }
-//    //myNoise.amp(noiseVolume);
-//    myTime.amp(noiseVolume1);
-//    //myTime.amp(noiseVolume);
-//    //println(noiseVolume);
-//    totalDepth = 0;  
-//  }
-//}
+
+  return borderRecord;
+}
 
 boolean animatedCleanScreen( int timing){
   int currentTime = second();
   
   if( currentTime % timing == 0){
     int animatedCleanAlpha = int ( 255 * skipFrames * 2/frameRate );
-    //println(animatedCleanAlpha);
     fill(0,0,0,animatedCleanAlpha);
     return true;
   }
