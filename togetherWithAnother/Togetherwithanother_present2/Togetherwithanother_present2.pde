@@ -16,8 +16,6 @@ boolean doScreenClean = false;
 int normalCleanAlpha = 10;
 int skipFrames = 4;
 
-int[] featherBorders;
-
 void settings(){
   size(1024, 848, P3D);
   PJOGL.profile = 1;
@@ -36,8 +34,8 @@ void setup() {
   kinect2A.initDevice(0);
   kinect2B.initDevice(1);
 
-  minThresh= 600;
-  maxThresh= 2400;
+  minThresh= 320;
+  maxThresh= 2200;
   
   canvas = createGraphics(width,height,P3D);
 
@@ -74,84 +72,65 @@ void draw() {
     } 
     displayDepth(depthA, colorA, true); //kinectData, color, control sound//
     // displayDepth(depthB, colorB, false); 
+    
   }
   canvas.endDraw();
+  
   image(canvas,0,0);
   //server.sendImage(canvas);
 }
 
 void displayDepth(int[] depthArr, int[] rgb, boolean soundControl) {
   
-  int pixelCoverage = 0; // detect if there is objects in the view.
-
-  int[] line = new int[96];
-  
   for ( int y = 0; y < kinect2A.depthHeight; y++) {
+    
+    int[] line = new int[96];
 
     for (int x = 64; x < kinect2A.depthWidth - 64; x++) {
 
       int offset = x + kinect2A.depthWidth * y;
-
       int depthData = depthArr[offset];
-      int displayVal = 0;
       
-      if(soundControl == true){
-        totalDepth += depthData;
-      }
-
-      if(y == 200 && x % 4 ==0){
-        line[x/4-16] = depthArr[offset];
-      }
       
       if ( depthData > minThresh && depthData < maxThresh ) {
-        displayVal = round(map(depthData, maxThresh, minThresh, 255, 5));
-
-        // if(y == 200){
-        //   stroke(255, 0, 0, displayVal);
-        // }else{
-        //   stroke(rgb[0], rgb[1], rgb[2], displayVal);
-        // }
-
+        int displayVal = round(
+          map(depthData, maxThresh, minThresh, 255, 5)
+        );
+        
         stroke(rgb[0], rgb[1], rgb[2], displayVal);
-
-        strokeWeight(displayVal/30);
-        point(2 * x, 2 * y, 255 - displayVal);       
-        if(displayVal > 50){
-          pixelCoverage++;
-        }
+        strokeWeight(displayVal/36);
+        
+        point(2 * x, 2 * y, 255 - displayVal);
       }
-    }
-  }
-
-  strokeWeight(2);
-  stroke(128, 255, 0, 100);
-  // update feather border
-  featherBorders = cliffMapper( line );
+      
+      line[x/4-16] = depthData;
+    } // x
+    // cliffMapper( line, y);
+  } // y
+  
 }
 
-int[] cliffMapper(int[] line){
-
-  line(128, 0 , 128 ,height);
-  line(line.length*8+128, 0 , line.length*8+128 ,height);
-
-  int[] borderRecord = {};
-
+void cliffMapper(int[] line, int y){
+  // int[] borderRecord = {};
   for(int i = 1; i < line.length; i++){
     int depthLeft = line[i-1];
     int depthRight = line[i];
+    
     int deltaDepth = depthRight - depthLeft;
-    if(abs(deltaDepth) > 960){
-      line(i * 8 + 128, 0 , i * 8 + 128, height);
-      borderRecord = append(borderRecord, i * 8 + 128);
+    int screenPos = i * 8 + 128;
+    
+    if(abs(deltaDepth) > 960 && depthRight <= maxThresh){
+      int displayVal = round(map(depthLeft, maxThresh, minThresh, 255, 5));
+      stroke(255, 0, 0, displayVal);
+      point(screenPos, 2 * y);
     }
+    
   }
-
-  return borderRecord;
 }
 
-boolean animatedCleanScreen( int timing){
+boolean animatedCleanScreen(int timing){
   int currentTime = second();
-  
+
   if( currentTime % timing == 0){
     int animatedCleanAlpha = int ( 255 * skipFrames * 2/frameRate );
     fill(0,0,0,animatedCleanAlpha);
